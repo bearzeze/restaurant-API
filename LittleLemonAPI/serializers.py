@@ -57,7 +57,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OrderItem
-        fields = ["item","quantity", "price"]
+        fields = ["item", "quantity", "price"]
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -66,6 +66,8 @@ class OrderSerializer(serializers.ModelSerializer):
     delivery_person = DeliveryPersonSerializer(source="delivery_crew")
     total_price = serializers.DecimalField(max_digits=8, decimal_places=2, source="total")
     
+    orderitem = OrderItemSerializer(many=True, read_only=True, source="order")
+    
     class Meta:
         model = Order
-        fields = ["id", "username", "date", "total_price", "delivery_person", "delivery_status"]
+        fields = ["id", "username", "date", "total_price", "delivery_person", "delivery_status", "orderitem"]
