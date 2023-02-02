@@ -26,13 +26,20 @@ def categories(request):
     elif request.method == "POST":
         if request.user.is_superuser:
             serialized_item = CategorySerializer(data=request.data)
-            serialized_item.is_valid()
-            serialized_item.save()
-            return Response(serialized_item.validated_data, status=status.HTTP_201_CREATED)
-        else:
-            return Response({"message": "Unauthorized action"}, status=status.HTTP_403_FORBIDDEN)
+            if serialized_item.is_valid():
+                # Checking whether category already exists
+                category_title = request.data["title"]
+                if Category.objects.filter(title=category_title).exists():
+                    return Response({"message": f"Category {category_title} already exists."}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    serialized_item.save()
+                    return Response(serialized_item.data, status=status.HTTP_201_CREATED)
+            else:
+                return Response({"message": "Invalid data. Fields that are required are slug and title."}, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response({"message": "Error occurs"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({"message": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
+
      
 @api_view(["GET", "PUT", "DELETE"])
 @permission_classes([IsAuthenticated])
@@ -41,9 +48,6 @@ def category(request, pk):
         item =  get_object_or_404(Category, pk=pk)
     except:
         return Response({"message": f"Error occurs. There is no category with id = {pk}"}, status=status.HTTP_404_NOT_FOUND)
-    
-    # Or 
-    # item =  get_object_or_404(Category, pk=pk)
 
     if request.method == "GET":
         serialized_item = CategorySerializer(item)
@@ -53,15 +57,17 @@ def category(request, pk):
         if request.user.is_superuser:
             if request.method == "DELETE":
                 item.delete()
-                return Response({"message": "Category deleted"}, status=status.HTTP_200_OK)
+                return Response({"message": f"Category {item.title} deleted"}, status=status.HTTP_200_OK)
             
             elif request.method == "PUT":
                 serialized_item = CategorySerializer(item, data=request.data);
                 if serialized_item.is_valid():
                     serialized_item.save()
                     return Response(serialized_item.data, status=status.HTTP_200_OK)
+                else:
+                    return Response({"message": "Invalid data. Fields that can be changed are slug and title."}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({"message": "Unauthorized action"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"message": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
 
 
 
@@ -107,9 +113,11 @@ def menu_items(request):
     elif request.method == "POST":
         if request.user.is_superuser:
             serialized_item = MenuItemSerializer(data=request.data)
-            serialized_item.is_valid()
-            serialized_item.save()
-            return Response(serialized_item.data, status=status.HTTP_201_CREATED)
+            if serialized_item.is_valid():
+                serialized_item.save()
+                return Response(serialized_item.data, status=status.HTTP_201_CREATED)
+            else:
+                return Response({"message": "Invalid data. Fields that are required are: title, price, category_id and featured. Category id must exists."}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({"message": "Unauthorized action"}, status=status.HTTP_403_FORBIDDEN)            
 
@@ -127,13 +135,21 @@ def single_menu_item(request, pk):
         if request.user.is_superuser:
             if request.method == "DELETE":
                 item.delete()
-                return Response({"message": "Menu item deleted"}, status=status.HTTP_200_OK)
+                return Response({"message": f"Menu item {item.title} deleted"}, status=status.HTTP_200_OK)
             
             elif request.method == "PATCH" or request.method == "PUT":
                 serializered_item = MenuItemSerializer(item, data=request.data, partial=True)
                 if serializered_item.is_valid():
-                    serializered_item.save()
-                    return Response(data=serializered_item.data, status=status.HTTP_200_OK)
+                    category_id = request.data["category_id"]
+                    if Category.objects.filter(pk=category_id).exists():
+                        serializered_item.save()
+                        return Response(data=serializered_item.data, status=status.HTTP_200_OK)
+                    else:
+                        return Response({"message": f"Category with id = {category_id} does not exists."}, status=status.HTTP_404_NOT_FOUND)
+
+                else:
+                    return Response({"message": "Invalid data. Fields that can be changed are: title, price, category_id or featured."}, status=status.HTTP_400_BAD_REQUEST)
+
          
         # Manager can update featured        
         elif request.user.groups.filter(name="Manager").exists() and request.method == "PATCH":
@@ -335,9 +351,12 @@ def order(request, pk):
 @api_view(["POST", "GET"])
 def user_registration(request):
     if request.method == "POST":
-        username = request.data["username"]
-        password = request.data["password"]
-        email = request.data["email"]
+        try:
+            username = request.data["username"]
+            password = request.data["password"]
+            email = request.data["email"]
+        except:
+            return Response({"message": "To register user need to specify next fields: username, password and email"}, status=status.HTTP_400_BAD_REQUEST)
         
         if not username or len(username) < 4:
             return Response({"message": "Username cannot be blank or less than 4 characters"}, status=status.HTTP_400_BAD_REQUEST)
@@ -348,17 +367,23 @@ def user_registration(request):
         if not email or not ".com" in email or not "@" in email:
             return Response({"message": "You didn't enter correct mail"}, status=status.HTTP_400_BAD_REQUEST)
         
-        new_user = User.objects.create(username=username, password=password, email=email)
-        # Default group for every new user is Customer
-        new_user.groups.add(Group.objects.get(name="Customer"))
-        
+        try:
+            new_user = User.objects.create(username=username, password=password, email=email)
+            # Default group for every new user is Customer
+            new_user.groups.add(Group.objects.get(name="Customer"))
+        except:
+            return Response({"message": f"Username {username} already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
         serializered_item = UserSerializer(new_user)
         return Response(serializered_item.data, status=status.HTTP_201_CREATED)
     
-    elif request.method == "GET" and request.user.is_superuser:
-        all_users = User.objects.all()
-        serialized_items = UserSerializer(all_users, many=True)
-        return Response(serialized_items.data, status=status.HTTP_200_OK)
+    elif request.method == "GET":
+        if request.user.is_superuser:
+            all_users = User.objects.all()
+            serialized_items = UserSerializer(all_users, many=True)
+            return Response(serialized_items.data, status=status.HTTP_200_OK)
+        else:
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
 
         
         

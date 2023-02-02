@@ -14,10 +14,10 @@ urlpatterns = [
 
     
     # FUNCTION-BASED VIEWS - they are in helpers.py file
-    path('categories', functionBasedViews.categories),
-    path('categories/<int:pk>', functionBasedViews.category),
+    path('categories', functionBasedViews.categories),   # OK
+    path('categories/<int:pk>', functionBasedViews.category), # OK
     
-    path('menu-items', functionBasedViews.menu_items),
+    path('menu-items', functionBasedViews.menu_items), # OK
     path('menu-items/<int:pk>', functionBasedViews.single_menu_item),
     
     path('cart/menu-items', functionBasedViews.cart),
@@ -25,8 +25,8 @@ urlpatterns = [
     path('orders', functionBasedViews.orders),
     path('orders/<int:pk>', functionBasedViews.order),
     
-    path('users', functionBasedViews.user_registration),
-    path('users/', include('djoser.urls')),
+    path('users', functionBasedViews.user_registration), # OK
+    path('users/', include('djoser.urls')),             # OK
 
     path("groups/manager/users", functionBasedViews.managers, name="managers"),
     path("groups/manager/users/<int:pk>", functionBasedViews.manager, name="manager"),
